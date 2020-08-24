@@ -23,7 +23,7 @@
         android:id="@+id/button_camera"
         android:layout_width="133dp"
         android:layout_height="71dp"
-        android:text="Take picture" />
+        android:text="Scan target" />
 
 
 </LinearLayout>

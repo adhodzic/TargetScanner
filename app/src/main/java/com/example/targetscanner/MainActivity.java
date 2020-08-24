@@ -85,7 +85,6 @@ public class MainActivity extends AppCompatActivity{
             if(imageFile!=null)
             {
                 imageUri = FileProvider.getUriForFile(this, "com.example.android.fileprovider", imageFile);
-                System.out.println(imageUri);
                 cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, imageUri);
                 startActivityForResult(cameraIntent, IMAGE_CAPTURE_CODE);
             }
@@ -121,9 +120,9 @@ public class MainActivity extends AppCompatActivity{
         super.onActivityResult(requestCode, resultCode, data);
         if(requestCode == SECOND_ACTIVITY && resultCode == 2){
             msg.setVisibility(View.VISIBLE);
-            msg.setText("No target found. Try again!!!");
+            msg.setText("Target not found. Try again!!!");
         }
-        if (requestCode != SECOND_ACTIVITY && resultCode == RESULT_OK){
+        if (requestCode == IMAGE_CAPTURE_CODE && resultCode == RESULT_OK){
             BitmapFactory.Options bmpFactoryOptions = new BitmapFactory.Options();
             bmpFactoryOptions.inPreferredConfig = Bitmap.Config.ARGB_8888;
             Bitmap bmp = null;

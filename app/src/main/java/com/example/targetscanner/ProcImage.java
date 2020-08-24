@@ -4,7 +4,9 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -28,34 +30,57 @@ import java.util.Comparator;
 import java.util.List;
 
 public class ProcImage extends AppCompatActivity {
-
+    ArrayList<Double> scores = new ArrayList<>();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_proc_image);
         ImageView imageView = (ImageView) findViewById(R.id.imageView);
-        System.out.println("Usli smo u ac2");
+        TextView ScoreTable = (TextView)findViewById(R.id.textView);
         long addr = getIntent().getLongExtra("mat", 0);
         Mat tempImg = new Mat(addr);
         Mat img = tempImg.clone();
-        Bitmap img2 = convertMatToBitMap(img);
+        Bitmap img2 = findHits(img, scores);
         if (img2 == null){
             Intent resultIntent = new Intent();
             resultIntent.putExtra("Msg", "Target not found");
+            resultIntent.putExtra("hits", scores);
             setResult(2, resultIntent);
             finish();
         }
         imageView.setImageBitmap(img2);
+        String strScores = "SCORE TABLE\n\n";
+        int count = 0;
+        double total = 0;
+        double totalRound = 0;
+        for (Double s:scores) {
+            total = total + s;
+            totalRound = totalRound + Math.floor(s);
+            count++;
+            String formatS = String.format("%.2f", s);
+            if(s %7==0) {
+                strScores = strScores + count + ": " + formatS;
+            }else{
+                strScores = strScores + count + ": " + formatS + "\n";
+            }
+        }
+        strScores = strScores + "\nTOTAL: " + totalRound + "(" +String.format("%.2f", total) + ")";
+        System.out.println(strScores);
+        if (strScores != ""){
+            ScoreTable.setVisibility(View.VISIBLE);
+            ScoreTable.setText(strScores);
+        }
     }
 
-    private static Bitmap convertMatToBitMap(Mat input){
+    private static Bitmap findHits(Mat input, ArrayList<Double> scores){
         Bitmap bmp = null;
         Mat image = input.clone();
-        Mat imageF = input.clone();
+
         Mat kernel = Mat.ones(5,5, CvType.CV_8U);
+        Mat grayC = new Mat(0,0,CvType.CV_8UC1);
+        Mat hierarchy = new Mat();
+        List<MatOfPoint> contours = new ArrayList<>();
         double w,h;
-        Point point = new Point(200,200);
-        Scalar color = new Scalar(0,255,0);
         w = image.cols();
         h = image.rows();
         double ratio = h/w;
@@ -63,21 +88,17 @@ public class ProcImage extends AppCompatActivity {
         Imgproc.resize(image, image, size);
         Mat imageO = image.clone();
         Mat edge = image.clone();
-        Mat grayC = new Mat(0,0,CvType.CV_8UC1);
         Imgproc.cvtColor(imageO, grayC, Imgproc.COLOR_BGR2GRAY);
         Imgproc.threshold(grayC, grayC,110,255, Imgproc.THRESH_BINARY_INV);
         Imgproc.erode(grayC, grayC, kernel);
         Imgproc.dilate(grayC, grayC, kernel);
         Imgproc.medianBlur(grayC, grayC, 15);
         Imgproc.Canny(grayC, edge,50,255);
-        List<MatOfPoint> contours = new ArrayList<>();
-        Mat hierarchy = new Mat();
         Imgproc.findContours(edge, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+
         MatOfPoint2f[] contoursPoly  = new MatOfPoint2f[contours.size()];
         Rect[] boundRect = new Rect[contours.size()];
-        Point[] centers = new Point[contours.size()];
-        float[][] radius = new float[contours.size()][1];
-        Mat drawing = Mat.zeros(edge.size(), CvType.CV_8UC3);
         double cx = 0,cy = 0,cw = 0,ch = 0;
         List<Rect> rectArr = new ArrayList<>();
         for (int i = 0; i < contours.size(); i++) {
@@ -94,9 +115,7 @@ public class ProcImage extends AppCompatActivity {
                 rectArr.add(boundRect[i]);
             }
         }
-        for (Rect r:rectArr) {
-            System.out.println(r);
-        }
+
         Collections.sort(rectArr, new Comparator<Rect>() {
             @Override
             public int compare(Rect o1, Rect o2) {
@@ -108,22 +127,23 @@ public class ProcImage extends AppCompatActivity {
                 return result;
             }
         } );
-        Rect a;
+
+        Rect resizeRect;
         try{
-            a = rectArr.get(0);
+            resizeRect = rectArr.get(0);
         }catch (Exception e){
             return null;
         }
-        double wR = ((a.br().y - a.tl().y) + (a.br().x - a.tl().x)) /2;
-        double R = wR/2/7.4;
-                ;
-        double aW = a.br().x - a.tl().x;
-        double aH = a.br().y - a.tl().y;
+        double wR = ((resizeRect.br().y - resizeRect.tl().y) + (resizeRect.br().x - resizeRect.tl().x)) /2;
+        double R = wR/2/7.2;
+        double aW = resizeRect.br().x - resizeRect.tl().x;
+        double aH = resizeRect.br().y - resizeRect.tl().y;
         Log.i("Radius", String.valueOf(R));
         int offsetX = (int)aW / 2;
         int offsetY = (int)aH / 2;
-        Rect offSet = new Rect((int)a.tl().x-offsetX, (int)a.tl().y-offsetY, (int)aW + (offsetY*2), (int)aH + (offsetY*2));
+        Rect offSet = new Rect((int)resizeRect.tl().x-offsetX, (int)resizeRect.tl().y-offsetY, (int)aW + (offsetY*2), (int)aH + (offsetY*2));
         Mat cropped = image.submat(offSet);
+
         Scalar lower = new Scalar(80, 25, 108);
         Scalar upper = new Scalar(179, 255, 255);
         Mat hsv = new Mat();
@@ -135,6 +155,7 @@ public class ProcImage extends AppCompatActivity {
         Mat edgeH = new Mat();
         Mat hierarchyH = new Mat();
         List<MatOfPoint> contoursH = new ArrayList<>();
+        //Imgproc.medianBlur(cropped, cropped, 9);
         Imgproc.cvtColor(cropped,hsv,Imgproc.COLOR_RGB2HSV);
         Core.inRange(hsv, lower, upper, mask);
         Mat kernel1 = Mat.ones(3,3, CvType.CV_8U);
@@ -143,66 +164,67 @@ public class ProcImage extends AppCompatActivity {
         Imgproc.cvtColor(output, gray, Imgproc.COLOR_RGB2GRAY);
         Imgproc.erode(mask, erosion, kernel);
         Imgproc.dilate(erosion, dil, kernel);
-        Imgproc.medianBlur(dil, dil, 17);
+        Imgproc.medianBlur(dil, dil, 11);
         Imgproc.Canny(dil, edgeH, 50, 255);
         Imgproc.findContours(edgeH, contoursH, hierarchyH, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
         Mat bg = Mat.zeros(cropped.size(), CvType.CV_8UC1);
-        Mat bgcopy = Mat.zeros(cropped.size(), CvType.CV_8UC1);
         Mat bg1 = Mat.zeros(cropped.size(), CvType.CV_8UC1);
         MatOfPoint2f approxCurve = new MatOfPoint2f();
         List<MatOfPoint> contoursC = new ArrayList<>();
-        Moments M = new Moments();
         List<Point> hits = new ArrayList<>();
         for(MatOfPoint c:contoursH){
             for(Point p:c.toList()){
-                Imgproc.circle(bg1, p, (int)R, new Scalar(73,73,73), 1,8,0);
+                Imgproc.circle(bg1, p, (int)R, new Scalar(55,55,55), 1,8,0);
                 Core.addWeighted(bg,1,bg1,1,0,bg);
                 bg1 = Mat.zeros(gray.size(), CvType.CV_8UC1);
             }
-
             Mat k = new Mat();
-            Imgproc.threshold(bg, bg, 200, 255, Imgproc.THRESH_BINARY);
-            Imgproc.erode(bg, bg, kernel1);
-            //Imgproc.dilate(bg, bg, kernel1);
-            Imgproc.medianBlur(bg, bg, 3);
+            Imgproc.threshold(bg, bg, 254, 255, Imgproc.THRESH_BINARY);
             Imgproc.dilate(bg, bg, kernel1);
+            Imgproc.medianBlur(bg,bg,3);
+            Imgproc.erode(bg, bg, kernel1);
+            Imgproc.medianBlur(bg,bg,3);
 
             Imgproc.findContours(bg, contoursC, hierarchyH, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
             Point centeroid = new Point();
             for(MatOfPoint cC:contoursC){
-                M = Imgproc.moments(cC);
+                Moments M = Imgproc.moments(cC);
                 if(M.get_m00()!=0){
                    centeroid.x = M.get_m10() / M.get_m00();
                    centeroid.y = M.get_m01() / M.get_m00();
                    double[] colo = dil.get((int)centeroid.y, (int)centeroid.x);
                    Double sth = colo[0];
                    if(sth > 50){
-                       hits.add(new Point(centeroid.x, centeroid.y));
+                       if(!hits.contains(new Point(centeroid.x, centeroid.y))){
+                           hits.add(new Point(centeroid.x, centeroid.y));
+                       }
                    }
                 }
             }
-            Core.addWeighted(bgcopy,1,bg,1,0,bgcopy);
             bg = Mat.zeros(gray.size(), CvType.CV_8UC1);
         }
-        Imgproc.circle(cropped, new Point(cropped.width()/2, cropped.height()/2), 1, new Scalar(0,255,0), 4, 8,0 );
+        Imgproc.circle(cropped, new Point(aW, aH), 1, new Scalar(0,255,0), 4, 8,0 );
         Imgproc.cvtColor(cropped, cropped, Imgproc.COLOR_BGR2RGB);
-        double segment = cropped.width()/2/6;
+        Scalar color = new Scalar(255,0,0);
+        double segment = aW/2/6;
+    int index = 0;
         for (Point h1:hits){
-            Imgproc.circle(cropped, h1, (int) R, color, 1, 8,0);
-            double aa = h1.x - cropped.width();
-            double bb = h1.y - cropped.height();
-            double d = (aa*aa) + (bb*bb);
-            d = Math.sqrt(d);
-            System.out.println((10-((d-R)/segment)));
-        }
-
-        try {
-            bmp = Bitmap.createBitmap(cropped.cols(), cropped.rows(), Bitmap.Config.ARGB_8888);
-            Utils.matToBitmap(cropped, bmp);
-        }
-        catch (CvException e){
-            Log.d("Exception",e.getMessage());
-        }
-        return bmp;
+        index++;
+        Imgproc.circle(cropped, h1, (int) R, color, 1, 8,0);
+        Imgproc.putText(cropped, String.valueOf(index), new Point(h1.x - (R/3.5), h1.y + (R/3.5)), Imgproc.FONT_HERSHEY_COMPLEX, R/35,  color, 1, Imgproc.LINE_AA);
+        double aa = h1.x - aW;
+        double bb = h1.y - aW;
+        double d = (aa*aa) + (bb*bb);
+        d = Math.sqrt(d);
+        scores.add((10-((d-R)/segment)));
     }
+        try {
+        bmp = Bitmap.createBitmap(cropped.cols(), cropped.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(cropped, bmp);
+    }
+        catch (CvException e){
+        return null;
+    }
+        return bmp;
+}
 }
