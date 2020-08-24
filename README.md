@@ -20,6 +20,6 @@ https://www.youtube.com/watch?v=laXMlVkdZng
 https://www.dropbox.com/sh/eytmgg4ufy726cj/AADVqz2YSyBLy3dVH9MjW5W1a?dl=0
 https://www.youtube.com/watch?v=laXMlVkdZng
 
-## Daljni razvoj
+## Daljnji razvoj
 
 Ova aplikacija je namjenjena za daljnji razvoj. Svaki pull zahtijevi su dobrodošli.
